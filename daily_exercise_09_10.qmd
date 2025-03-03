@@ -1,0 +1,77 @@
+---
+title: "Daily Exercise 9"
+author: "Caleb Cripe"
+date: "03-02-2025"
+format: html
+execute: 
+  echo: TRUE
+---
+
+# Question 1
+```{r}
+data("airquality")
+?airquality
+```
+
+# Question 2
+```{r}
+library(visdat)
+vis_dat(airquality)
+vis_miss(airquality)
+vis_guess(airquality)
+```
+
+After observing the data set, it appears to need cleaning because there is 5% of the overall data missing. Out of the 5% of missing data, 24% of it comes from the ozone variable and 5% comes from the solar radiation variable. 
+
+## Cleaned Data
+```{r}
+library(flextable)
+library(dplyr)
+library(tidyr)
+
+cleaned_air_quality <- airquality %>%
+  drop_na(Ozone, Solar.R)
+
+vis_dat(cleaned_air_quality)
+```
+
+# Question 3
+```{r}
+model <- lm(Ozone ~ Temp, data = cleaned_air_quality)
+```
+
+I chose to use the temperature variable to predict ozone because higher temperatures are correlated with higher ozone concentrations, indicating worse air quality. Since this correlation has been extensively documented and has proven to be a valid predictor of ozone, I thought that it would be a logical choice for a prediction variable in this model. 
+
+# Question 4
+```{r}
+summary(model)
+shapiro.test(model$residuals)
+```
+
+I believe that this is a valid model because the p-value is very small, which indicates that the model will follow a normal distribution pattern and that there is a high likelihood of not reaching a null hypothesis.
+
+# Question 5
+After utilizing the Shapiro-Wilk normality test the R^2 that I found was 0.488, which indicates that 48.8% of the Ozone variance can be attributed to variations in temperature. 
+
+# Question 6
+```{r}
+library(broom)
+augmented_air_quality <- augment(model)
+head(augmented_air_quality)
+```
+
+# Question 7
+```{r}
+library(ggplot2)
+ggplot(augmented_air_quality, aes(x = Ozone, y = .fitted)) +
+  geom_point(color = "green") +
+  geom_abline(intercept = 0, slope = 1, color = "red") +
+  labs(
+    title = "Actual vs. Predicted Ozone",
+    subtitle = paste("Correlation:", round(cor(augmented_air_quality$Ozone, augmented_air_quality$.fitted),2)),
+    x = "Actual Ozone",
+    y = "Predicted Ozone",
+  ) +
+  theme_bw()
+```
+
