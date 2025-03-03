@@ -4,7 +4,7 @@ author: "Caleb Cripe"
 date: "03-02-2025"
 format: html
 execute: 
-  echo: TRUE
+  echo: true
 ---
 
 # Question 1
