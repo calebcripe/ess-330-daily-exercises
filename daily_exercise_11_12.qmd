@@ -1,0 +1,190 @@
+---
+title: "Day-11-12"
+author: Caleb Cripe
+format: html
+editor: visual
+---
+
+### **Exploratory Data Analysis and Linear Regression in R**
+
+In this assignment, you will again analyze the `airquality` dataset using various statistical tests, data transformation techniques, and regression modeling. Follow the step-by-step guiding questions to complete the analysis in a qmd.
+
+## **Part 1: Normality Testing**
+
+1.  Load the airquality dataset in R. What does this dataset represent? Explore its structure using functions like `str()` and `summary()`.
+
+```{r}
+data(airquality)
+str(airquality)
+summary(airquality)
+```
+
+This dataset represent the records for four variables that impact daily air quality in New York City. The four variables it accounts for are Ozone, Solar.R, Wind, and Temp.
+
+2.  Perform a Shapiro-Wilk normality test on the following variables: `Ozone`, `Temp`, `Solar.R`, and `Wind.`
+
+```{r}
+shapiro.test(airquality$Ozone)
+
+shapiro.test(airquality$Solar.R)
+
+shapiro.test(airquality$Temp)
+
+shapiro.test(airquality$Wind)
+```
+
+3.  What is the purpose of the Shapiro-Wilk test?
+
+The Shapiro-Wilk test is intended to test data for normal distribution in relation to the null hypothesis, with low p-values indicating that the data is likely not normally distributed. 
+
+4.  What are the null and alternative hypotheses for this test?
+
+The null hypothesis for the Shapiro-Wilk test is that the data is normally distributed, with a p-value < 0.05 rejecting this, and the alternative hypothesis is that the data is not normally distributed. 
+
+5.  Interpret the p-values. Are these variables normally distributed?
+
+Out of the four variables only wind appears to be not normally distributed according to the Shapiro-Wilk test, while Ozone, Solar.R, and Wind are normally distributed. 
+
+## **Part 2: Data Transformation and Feature Engineering**
+
+6.  Create a new column with `case_when` traslating the Months into four seasons (Winter (Nov, Dec, Jan), Spring (Feb, Mar, Apr), Summer (May, Jun, Jul), and Fall (Aug, Sep, Oct)).
+
+```{r}
+library(dplyr)
+
+airquality <- airquality %>%
+  mutate(season = case_when(
+    Month %in% c(2, 3, 4) ~ "Spring",
+    Month %in% c(5, 6, 7) ~ "Summer",
+    Month %in% c(8, 9, 10) ~ "Fall",
+    Month %in% c(11, 12, 1) ~ "Winter"
+  ))
+```
+
+7.  Use `table` to figure out how many observations we have from each season.
+
+```{r}
+table(airquality$season)
+```
+
+There are 61 recorded obervations for Fall and 92 recorded observations for Summer, with 0 recorded for Spring and Winter. 
+
+## **Part 3: Data Preprocessing**
+
+8.  Normalize the predictor variables (Temp, Solar.R, Wind, and Season) using a `recipe`
+
+```{r}
+library(tidymodels)
+
+(recipe_obj <- recipe(Ozone ~ Solar.R + Temp + Wind + season, data = airquality) |>
+  step_impute_mean(all_numeric_predictors()) |>
+  step_dummy(all_factor_predictors()) |>
+  step_normalize(all_numeric_predictors())
+  )
+```
+
+9.  What is the purpose of normalizing data?
+
+Data normalization is important for creating models since it ensures that all of the variables are on a common scale, prevents biased modelling, and improves comparisons. 
+
+10. What function can be used to impute missing values with the mean?
+
+The step_impute_mean() fuction can be used to impute missing values with the mean. 
+
+11. `prep` and `bake` the data to generate a processed dataset.
+
+```{r}
+prep_recipe <- prep(recipe_obj, training = airquality)
+
+normalized_data <- bake(prep_recipe, new_data = NULL) |>
+  drop_na()
+
+normalized_data
+```
+
+12. Why is it necessary to both `prep()` and `bake()` the recipe?
+
+It is necessary to prep and bake the recipe since that estimates the parameters for transformation and then applies the transformation to the data.
+
+## **Part 4: Building a Linear Regression Model**
+
+13. Fit a linear model using Ozone as the response variable and all other variables as predictors. Remember that the `.` notation can we used to include all variables.
+
+```{r}
+(model = lm(Ozone ~ ., data = normalized_data))
+
+glance(model)
+
+(pred <- augment(model, normalized_data))
+```
+
+14. Interpret the model summary output (coefficients, R-squared, p-values) in plain language
+
+In the model summary output I received an r-squared value of 0.596, which demonstrates that 59.6% of the variability for Ozone can be attributed to the model. I also received a p-value of 4.58e-21 which indicated that the null hypothesis can be rejected with high confidence. The coefficients for the model include Intercept = 42.213, Solar.R = 4.857, Temp = 16.376, Wind = -10.952, and Season = 1.959.
+
+## **Part 5: Model Diagnostics**
+
+15. Use `broom::augment` to supplement the normalized `data.frame` with the fitted values and residuals.
+
+```{r}
+library(broom)
+
+augmented_data <- augment(model, new_data = normalized_data)
+
+augmented_data
+```
+
+16. Extract the residuals and visualize their distribution as a histogram and qqplot.
+
+```{r}
+residuals <- resid(model)
+
+hist(residuals,
+     main = "Residuals Histogram",
+     xlab = "Residuals",
+     col = "green",
+     border = "black",
+     breaks = 20)
+
+qqnorm(residuals, main = "Residuals QQPlot")
+qqline(residuals, col = "red")
+```
+
+17. Use `ggarange` to plot this as one image and interpret what you see in them.
+
+```{r}
+install.packages("ggpubr", repos = "https://cran.rstudio.com/")
+library(ggpubr)
+
+hist_plot <- ggplot(augmented_data, aes(x = residuals)) +
+  geom_histogram(binwidth = 1, fill = "gray", color = "green") +
+  labs(title = "Residuals Histogram", x = "Residuals", y = "Frequency") +
+  theme_bw()
+
+qq_plot <- ggplot(augmented_data, aes(sample = residuals)) +
+  geom_qq() +
+  geom_qq_line() +
+  labs(title = "Residuals QQPLOT") +
+  theme_bw()
+
+ggarrange(hist_plot, qq_plot,
+          ncol = 2, nrow = 1,
+          labels = c("A", "B"))
+```
+
+Based on these two graphs, the residuals seems to be normally distributed, though slightly skewed to the left, since they create a bell curve around 0 in the histogram graphs and follow the line fairly closely in the qqplot.  
+
+18. Create a scatter plot of actual vs. predicted values using ggpubr with the following setting:
+
+```{r}         
+library(ggplot2)
+
+ggscatter(augmented_data, x = "Ozone", y = ".fitted",
+          add = "reg.line", conf.int = TRUE,
+          cor.coef = TRUE, cor.method = "spearman",
+          ellipse = TRUE)
+```
+
+19. How strong of a model do you think this is?
+
+I would say this is a fairly strong model because the plots on the graph are relatively clustered with few dramatic outliers and almost all of the plots are contained in the ellipse. Additionally, the R and p values indicate that the model strongly rejects the null hypothesis. 
