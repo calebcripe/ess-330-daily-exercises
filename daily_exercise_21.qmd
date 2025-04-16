@@ -1,0 +1,67 @@
+---
+title: "daily_exercise_21"
+author: "Caleb Cripe"
+format: html
+editor: visual
+execute: 
+  echo: true
+---
+
+# Exercise Data
+```{r}
+install.packages("dataRetrieval", repos = "https://cloud.r-project.org")
+install.packages("tsibble", repos = "https://cloud.r-project.org")
+library(dataRetrieval)
+library(tidyverse)
+library(tsibble)
+
+poudre_flow <- readNWISdv(siteNumber = "06752260",    
+                          parameterCd = "00060",
+                          startDate = "2013-01-01",   
+                          endDate = "2023-12-31") |>  
+  renameNWISColumns() |>                           
+  mutate(Date = yearmonth(Date)) |>             
+  group_by(Date) |>                                   
+  summarise(Flow = mean(Flow))                       
+```
+
+# Part 1
+```{r}
+poudre_ts <- as_tsibble(poudre_flow, index = Date)
+```
+
+# Part 2
+```{r}
+library(ggplot2)
+install.packages("plotly", repos = "https://cloud.r-project.org")
+library(plotly)
+
+poudre_plot <- ggplot(poudre_ts, aes(x = Date, y = Flow)) +
+  geom_line(color = "blue") +
+  labs(title = "Monthly Mean Streamflow", y = "Flow (cfs)", x = "Date") +
+  theme_bw()
+
+ggplotly(poudre_plot)
+```
+
+# Part 3
+```{r}
+install.packages("feasts", repos = "https://cloud.r-project.org")
+library(feasts)
+
+poudre_ts %>%
+  gg_subseries(Flow)
+```
+
+In this plot, the average flows in each month are relatively low until May and June, in which we see a big spike in flow rate. Season could be defined as the "slow" season, or every month out of the year except May and June, and the "peak" season, from May to June. A subseries represents the average of all values for a single month over every year observed.
+
+# Part 4
+```{r}
+poudre_decomp <- poudre_ts |>
+  model(STL(Flow ~ season(window = "periodic"))) |>
+  components()
+
+autoplot(poudre_decomp)
+```
+
+In both the flow, trend, and remainder charts, the values start high and decrease over time while in the season chart the spikes stay consistent. This could be caused by the fact that the seasonality occurs at the same time each year and has little variation leading to a reliable chart. The trend chart experiences variation in the volume of water flowing each year, leading to it declining. 
