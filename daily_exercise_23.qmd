@@ -1,0 +1,31 @@
+---
+title: "daily_exercise_23"
+author: "Caleb Cripe"
+format: html
+editor: visual
+execute:
+  echo: true
+---
+
+```{r}
+install.packages("sf")
+install.packages("terra")
+install.packages("mapview")
+install.packages("remotes")
+
+library(sf)
+library(terra)
+library(mapview)
+library(remotes)
+
+remotes::install_github("mikejohnson51/AOI")
+library(AOI)
+```
+
+```{r}
+sf::sf_extSoftVersion()
+
+terra::gdal()
+```
+
+

@@ -1,0 +1,120 @@
+---
+title: "daily_exercise_27"
+format: html
+editor: visual
+---
+
+## Library
+```{r}
+library(sf)   
+library(osmdata)     
+library(dplyr)    
+library(terra)
+library(ggplot2) 
+library(viridis)
+```
+
+## Define River Object
+```{r}
+Sys.setenv("AWS_NO_SIGN_REQUEST" = "YES")
+
+(bb = AOI::geocode("Fort Collins", bbox = TRUE) |> 
+  st_transform(5070))
+
+elev = rast('/vsis3/lynker-spatial/gridded-resources/dem.vrt') |> 
+  crop(bb)
+
+writeRaster(elev, filename = "data/foco-elev.tif", overwrite = TRUE)
+
+writeRaster(elev, filename = "../resources/foco-elev-cm.tif", overwrite = TRUE)
+
+fc = AOI::geocode("Fort Collins", bbox = TRUE) |> 
+  st_transform(crs(elev))
+
+foco_rivers <- osmdata::opq(st_bbox(st_transform(fc,4326))) |> 
+  add_osm_feature("waterway") |> 
+  osmdata_sf()
+
+poudre_river <- foco_rivers$osm_lines |>
+  filter(name == "Cache la Poudre River")
+
+poudre_river_union <- st_union(poudre_river)
+
+poudre_river_sf <- st_as_sf(poudre_river_union)
+
+river_length <- st_length(poudre_river_sf)
+
+poudre_pts <- st_cast(poudre_river_sf, "POINT")
+```
+
+## Define DEM Object
+```{r}
+elev <- rast("/vsis3/lynker-spatial/gridded-resources/dem.vrt")
+```
+
+## Extract River Profile
+```{r}
+poudre_pts <- st_transform(poudre_pts, crs(elev))
+
+poudre_vect <- vect(poudre_pts)
+
+elev_values <- terra::extract(elev, poudre_vect)
+
+poudre_profile <- dplyr::bind_cols(poudre_pts, elev_values)
+
+poudre_profile <- poudre_profile |> 
+  mutate(ID = row_number())
+```
+
+## Compute Sinuosity
+```{r}
+first_point <- poudre_profile[1, ]  
+last_point <- poudre_profile[nrow(poudre_profile), ]
+
+straight_line_dist <- st_distance(first_point, last_point)
+
+straight_line_dist <- as.numeric(st_distance(first_point, last_point))
+
+river_length <- st_length(poudre_river_sf)
+
+sinuosity <- as.numeric(river_length) / straight_line_dist
+sinuosity
+```
+
+When computing the sinuosity of the Chache la Poudre River, I recieved a value of 2.897. This value is fairly typical for long, winding rivers and indicated that the river is 2.9 times longer than a straight line. Given that the Poudre runs through a canyon, this value aligns with the sinuosity of the river.
+
+## Compute Slope
+```{r}
+first_elevation <- poudre_profile$dem[1]  
+last_elevation <- poudre_profile$dem[nrow(poudre_profile)]
+
+first_elevation <- first_elevation * 100  
+last_elevation <- last_elevation * 100
+
+elevation_change <- abs(last_elevation - first_elevation)
+
+river_length_cm <- as.numeric(river_length) * 100
+
+slope <- elevation_change / river_length_cm
+slope
+```
+
+When computing the slope for the Cache la Poudre River, I recieved a value of 1.01 cm/m. This indicates that for every meter of river length, there is a 1.01 cm increase in elevation. This is fairly typical for flat, urban areas like Fort Collins. 
+
+## Map Profile
+```{r}
+ggplot(poudre_profile, aes(x = ID, y = dem)) +
+  geom_line(color = "blue", size = 1) +  
+  geom_point(color = "red", size = 2) +  
+  labs(
+    title = "River Profile of Cache la Poudre River",
+    x = "Point ID",
+    y = "Elevation (m)",
+    caption = "Elevation profile along the Cache la Poudre River"
+  ) +
+  theme_bw() +  
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    plot.title = element_text(hjust = 0.5)
+  ) 
+```
